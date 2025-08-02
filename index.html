@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0f172a">
 <title>Akvārija panelis</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" />
 <style>
@@ -10,77 +11,80 @@
     --bg:#0f172a; --card:#111827; --card2:#0b1220;
     --text:#e5e7eb; --muted:#9ca3af;
     --ok:#10b981; --warn:#f59e0b; --err:#ef4444;
-    --border:#1f2937;
+    --border:#1f2937; --accent:#38bdf8;
   }
-  html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,Segoe UI,Roboto,Arial}
-  .wrap{max-width:1200px;margin:16px auto;padding:0 14px}
-  header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
-  header h1{margin:0;font-size:28px;font-weight:800;letter-spacing:.5px}
-  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
-  .pill{display:inline-block;padding:.3em .7em;border-radius:999px;font-size:12px}
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+            font:14px/1.5 system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
+  .wrap{max-width:1200px;margin:auto;padding:16px 14px 28px}
+
+  /* ===== Header ===== */
+  header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  header h1{margin:0;font-size:clamp(22px, 3.2vw, 30px);font-weight:800;letter-spacing:.3px}
+  header .logo{height:48px;width:auto;display:block;border-radius:10px}
+  @media (max-width:420px){ header .logo{height:40px} }
+
+  /* ===== Tool bar / status ===== */
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;
+       background:var(--card);border:1px solid var(--border);
+       border-radius:12px;padding:10px 12px;overflow:auto}
+  .pill{display:inline-block;padding:.35em .7em;border-radius:999px;font-size:12px;white-space:nowrap}
   .ok{background:#064e3b;color:#a7f3d0}
   .warn{background:#7c2d12;color:#fed7aa}
   .err{background:#7f1d1d;color:#fecaca}
-  .ctrls{display:flex;gap:8px;align-items:center;margin-left:auto}
-  select,button,input[type="number"]{background:#1f2937;border:1px solid #303646;color:var(--text);border-radius:8px;padding:8px 10px;cursor:pointer}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
-  @media (max-width:920px){ .grid{grid-template-columns:1fr} }
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px}
+
+  .ctrls{display:flex;gap:8px;align-items:center;margin-left:auto;white-space:nowrap}
+  .ctrls label{color:var(--muted)}
+  select,button,input[type="number"]{
+    background:#1f2937;border:1px solid #303646;color:var(--text);
+    border-radius:8px;padding:8px 10px;cursor:pointer
+  }
+  button:hover{border-color:#3b82f6}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  /* ===== Grid (charts) ===== */
+  .grid{display:grid;gap:14px;margin-top:12px;
+        grid-template-columns:repeat(auto-fit, minmax(320px, 1fr))}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;min-width:0}
   .card .head{padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600}
-  .pane{height:420px}
-  .error{background:#7f1d1d;color:#fecaca;padding:10px 12px;border-radius:10px;margin:10px 0;display:none}
-  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
-  /* Dropdown (details) */
-  details.dropdown{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-top:14px}
-  details.dropdown>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:600;user-select:none}
+  .pane{height:clamp(260px, 40vh, 460px)} /* adaptīvs augstums */
+
+  /* ===== Dropdown (notikumi) ===== */
+  details.dropdown{background:var(--card);border:1px solid var(--border);
+                   border-radius:12px;margin-top:14px}
+  details.dropdown>summary{cursor:pointer;list-style:none;padding:10px 12px;
+                           font-weight:600;user-select:none}
   details.dropdown>summary::-webkit-details-marker{display:none}
   .drop-body{padding:0 12px 12px 12px}
-  .events{max-height:320px;overflow:auto;border-top:1px solid var(--border)}
+  .events{max-height:clamp(220px, 42vh, 340px);overflow:auto;border-top:1px solid var(--border)}
   table{width:100%;border-collapse:collapse}
   th,td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px}
   th{color:var(--muted);text-align:left;position:sticky;top:0;background:var(--card2)}
-  header img.logo{
-  height:60px;          /* vai 36px, ja gribi mazāku */
-  width:auto;
-  display:block;
-  border-radius:8px;    /* ja gribi noapaļotus stūrus */
-}
-  
-  /* width */
-  ::-webkit-scrollbar {
-      width: 5px;
+  @media (max-width:480px){
+    th,td{padding:7px 8px;font-size:12px}
   }
-  
-  /* Track */
-  ::-webkit-scrollbar-track {
-      box-shadow: inset 0 0 5px grey; 
-      border-radius: 10px;
-  }
-   
-  /* Handle */
-  ::-webkit-scrollbar-thumb {
-      background: rgba(255, 0, 0, 0.6); 
-      border-radius: 10px;
-  }
+
+  /* ===== Error banner ===== */
+  .error{background:#7f1d1d;color:#fecaca;padding:10px 12px;border-radius:10px;margin:10px 0;display:none}
+
+  /* ===== Slim scrollbars (webkit) ===== */
+  ::-webkit-scrollbar{height:6px;width:6px}
+  ::-webkit-scrollbar-thumb{background:rgba(148,163,184,.4);border-radius:10px}
+  ::-webkit-scrollbar-track{background:transparent}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-  
-  <img
-    class="logo"
-    src="https://raw.githubusercontent.com/JanisEglis/akvarija-grafiki/main/fish%20web.png"
-    alt="Akvārija logo"
-  />
-
+    <img class="logo" src="https://raw.githubusercontent.com/JanisEglis/akvarija-grafiki/main/fish%20web.png"
+         alt="Akvārija logo" width="96" height="96" />
     <h1>Akvārija panelis</h1>
   </header>
 
   <div id="err" class="error"></div>
 
-  <!-- Statuse + kontrole vienā joslā -->
-  <div class="bar" id="statusBar">
+  <!-- Statusi + kontroles (horizontāli ritināmas mazā ekrānā) -->
+  <div class="bar" id="statusBar" aria-label="Datu filtri un kontrole">
     <span class="pill ok"   id="stat-water">Ūdens: —</span>
     <span class="pill warn" id="stat-alarm">Signalizācija: —</span>
     <span class="pill ok"   id="stat-wifi">Wi-Fi: —</span>
@@ -88,29 +92,29 @@
     <span class="pill ok"   id="stat-feed">Barošana: —</span>
 
     <div class="ctrls">
-      <label>Laika periods:</label>
-      <select id="range">
+      <label for="range">Laika periods:</label>
+      <select id="range" aria-label="Laika periods">
         <option value="24h">Pēdējās 24 h</option>
         <option value="7d">Pēdējās 7 dienas</option>
         <option value="30d">Pēdējās 30 dienas</option>
         <option value="all">Viss periods</option>
       </select>
-      <button id="refresh">Atjaunot</button>
-      <label class="mono">Auto (min):</label>
-      <input id="autoMins" type="number" min="0" step="1" value="0" style="width:80px">
-      <button id="applyAuto">Iestatīt</button>
+      <button id="refresh" type="button">Atjaunot</button>
+      <label class="mono" for="autoMins">Auto (min):</label>
+      <input id="autoMins" type="number" min="0" step="1" value="0" style="width:84px" />
+      <button id="applyAuto" type="button">Iestatīt</button>
     </div>
   </div>
 
-  <!-- Grafiki blakus -->
+  <!-- Grafiki blakus (auto-fit) -->
   <div class="grid">
     <div class="card">
       <div class="head">Temperatūra (°C)</div>
-      <div id="temp" class="pane"></div>
+      <div id="temp" class="pane" role="img" aria-label="Temperatūras grafiks"></div>
     </div>
     <div class="card">
       <div class="head">LED, Dzesēšana, Ūdens</div>
-      <div id="lf" class="pane"></div>
+      <div id="lf" class="pane" role="img" aria-label="LED, Dzesēšana un Ūdens grafiks"></div>
     </div>
   </div>
 
@@ -135,23 +139,23 @@
 <script>
 /*** DATU AVOTS ***/
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQZnVtmAM6S2H1BTJhqKqIPFPh5aU9AWYJclFDU2f4J-k3ouRNMFyjYEZo8xIfxwHT-SjMBAUWOl1PX/pub?gid=0&single=true&output=csv';
-const CORS_PROXY = ''; // vajadzības gadījumā: 'https://cors.isomorphic-git.org/'
+const CORS_PROXY = ''; // ja kādreiz vajag: 'https://cors.isomorphic-git.org/'
 
 /*** Kolonnu aliasi ***/
 const KEY = {
-  time:  ['Laiks'],
-  temp:  ['Temp'],
-  led:   ['LED'],
-  fan:   ['Dzesēšana','Dzesesana'],
-  alarm: ['Signalizācija','Signalizacija'],
-  water: ['Ūdens līmenis','Ūdens limenis','Udens līmenis','Udens limenis'],
-  clean: ['Tīrīt pēc (s)','Tīrīt pēc','Tirit pec (s)','Tirit pec'],
-  feed:  ['Barošana','Barosana'],
-  wifi:  ['WiFi OK','Wi-Fi OK','Wifi OK','WiFi','WIFI OK'],
+  time:['Laiks'],
+  temp:['Temp'],
+  led:['LED'],
+  fan:['Dzesēšana','Dzesesana'],
+  alarm:['Signalizācija','Signalizacija'],
+  water:['Ūdens līmenis','Ūdens limenis','Udens līmenis','Udens limenis'],
+  clean:['Tīrīt pēc (s)','Tīrīt pēc','Tirit pec (s)','Tirit pec'],
+  feed:['Barošana','Barosana'],
+  wifi:['WiFi OK','Wi-Fi OK','Wifi OK','WiFi','WIFI OK'],
   fanMode:['Fan rež.','Fan rez.','Fan režīms','Fan režims','Fan rezims']
 };
 
-/*** UI elementi ***/
+/*** UI references ***/
 const elErr = document.getElementById('err');
 const selRange = document.getElementById('range');
 const btnRefresh = document.getElementById('refresh');
@@ -159,9 +163,17 @@ const inputAuto = document.getElementById('autoMins');
 const btnApplyAuto = document.getElementById('applyAuto');
 const tbody = document.querySelector('#events tbody');
 
+/*** Charts ***/
 let chTemp = echarts.init(document.getElementById('temp'), null, {renderer:'canvas'});
 let chLF   = echarts.init(document.getElementById('lf'),   null, {renderer:'canvas'});
-window.addEventListener('resize', ()=>{ chTemp.resize(); chLF.resize(); });
+
+/* Debounced resize */
+(()=>{
+  let t=null;
+  const onR=()=>{ clearTimeout(t); t=setTimeout(()=>{ chTemp.resize(); chLF.resize(); }, 120); };
+  window.addEventListener('resize', onR, {passive:true});
+})();
+
 let autoTimer = null;
 
 /*** Palīgfunkcijas ***/
@@ -231,7 +243,7 @@ function render(objs){
   setPill('stat-clean', 'Tīrīt pēc: '+(cleanSVal>0 ? fmtSec(cleanSVal) : (cleanSVal===0?'jātīra':'—')), (cleanSVal>0)?'warn':'err');
   setPill('stat-feed',  'Barošana: '+(lastNonEmpty(objs, KEY.feed)||'—'), 'ok');
 
-  // notikumi (ģenerējam, bet rādām tikai dropdownā)
+  // notikumi (dropdown tabulā)
   tbody.innerHTML='';
   const ev=[];
   for(let i=0;i<objs.length;i++){
@@ -258,7 +270,7 @@ function render(objs){
     const tr=document.createElement('tr'); tr.innerHTML=`<td class="mono">${t}</td><td>${what}</td><td>${det}</td>`; tbody.appendChild(tr);
   });
 
-  // Temperatūras robežas
+  // Temperatūras robežas: neliels “pad”, lai skala nemaldina
   const tMin=Math.min(...TEMP), tMax=Math.max(...TEMP);
   const pad=.4, yMin=Math.floor((tMin-pad)*10)/10, yMax=Math.ceil((tMax+pad)*10)/10;
 
@@ -268,7 +280,8 @@ function render(objs){
     grid:{left:46,right:14,top:18,bottom:36},
     xAxis:{type:'time'},
     yAxis:{type:'value',name:'°C',min:yMin,max:yMax},
-    series:[{type:'line',name:'Temperatūra',data:T.map((t,i)=>[t,TEMP[i]]),smooth:true,showSymbol:false,symbol:'none',emphasis:{disabled:true},lineStyle:{width:2}}]
+    series:[{type:'line',name:'Temperatūra',data:T.map((t,i)=>[t,TEMP[i]]),
+      smooth:true,showSymbol:false,symbol:'none',emphasis:{disabled:true},lineStyle:{width:2}}]
   });
 
   // LED / Dzesēšana / Ūdens
@@ -276,7 +289,7 @@ function render(objs){
     tooltip:{trigger:'axis'},
     grid:{left:46,right:14,top:30,bottom:36},
     legend:{top:4,icon:'rect',itemWidth:14,itemHeight:6,textStyle:{color:'#e5e7eb'},inactiveColor:'#6b7280',
-            data:[{name:'LED %'},{name:'Dzesēšana %'},{name:'Ūdens (0/100)'}]},
+      data:[{name:'LED %'},{name:'Dzesēšana %'},{name:'Ūdens (0/100)'}]},
     xAxis:{type:'time'},
     yAxis:{type:'value',name:'%',min:0,max:100},
     series:[
