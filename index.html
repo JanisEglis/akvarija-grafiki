@@ -24,45 +24,72 @@
   header .logo{height:48px;width:auto;display:block;border-radius:10px}
   @media (max-width:420px){ header .logo{height:40px} }
 
-  /* ===== Tool bar / status ===== */
-  .bar{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;
-       background:var(--card);border:1px solid var(--border);
-       border-radius:12px;padding:10px 12px;overflow:auto}
+  /* ===== Toolbar (no scroll) ===== */
+  .toolbar{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px;
+    display:grid;
+    gap:10px;
+  }
+  .pills{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap:8px 10px;
+    align-items:center;
+  }
+  .controls{
+    display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  }
+  .controls input#autoMins{ width:84px }
+  @media (min-width:900px){
+    .toolbar{ grid-template-columns: 1fr auto; align-items:center; }
+  }
+
   .pill{display:inline-block;padding:.35em .7em;border-radius:999px;font-size:12px;white-space:nowrap}
   .ok{background:#064e3b;color:#a7f3d0}
   .warn{background:#7c2d12;color:#fed7aa}
   .err{background:#7f1d1d;color:#fecaca}
 
-  .ctrls{display:flex;gap:8px;align-items:center;margin-left:auto;white-space:nowrap}
-  .ctrls label{color:var(--muted)}
   select,button,input[type="number"]{
     background:#1f2937;border:1px solid #303646;color:var(--text);
     border-radius:8px;padding:8px 10px;cursor:pointer
   }
   button:hover{border-color:#3b82f6}
-  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 
-  /* ===== Grid (charts) ===== */
+  /* ===== Charts grid ===== */
   .grid{display:grid;gap:14px;margin-top:12px;
         grid-template-columns:repeat(auto-fit, minmax(320px, 1fr))}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;min-width:0}
   .card .head{padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600}
-  .pane{height:clamp(260px, 40vh, 460px)} /* adaptīvs augstums */
+  .pane{height:clamp(260px, 40vh, 460px)}
 
-  /* ===== Dropdown (notikumi) ===== */
+  /* ===== Events dropdown ===== */
   details.dropdown{background:var(--card);border:1px solid var(--border);
                    border-radius:12px;margin-top:14px}
-  details.dropdown>summary{cursor:pointer;list-style:none;padding:10px 12px;
-                           font-weight:600;user-select:none}
+  details.dropdown>summary{
+    cursor:pointer;list-style:none;padding:10px 12px;font-weight:600;user-select:none;
+    position:relative;
+  }
+  /* sarkanīgs trīsstūris labajā pusē (norāde, ka nolaižams) */
+  details.dropdown>summary::after{
+    content:""; position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent;
+    border-top:8px solid #f87171; /* sarkanīga bultiņa uz leju */
+    transition:transform .2s ease;
+  }
+  details.dropdown[open]>summary::after{
+    transform:translateY(-50%) rotate(180deg); /* apgriež uz augšu, kad atvērts */
+  }
   details.dropdown>summary::-webkit-details-marker{display:none}
+
   .drop-body{padding:0 12px 12px 12px}
   .events{max-height:clamp(220px, 42vh, 340px);overflow:auto;border-top:1px solid var(--border)}
   table{width:100%;border-collapse:collapse}
   th,td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px}
   th{color:var(--muted);text-align:left;position:sticky;top:0;background:var(--card2)}
-  @media (max-width:480px){
-    th,td{padding:7px 8px;font-size:12px}
-  }
+  @media (max-width:480px){ th,td{padding:7px 8px;font-size:12px} }
 
   /* ===== Error banner ===== */
   .error{background:#7f1d1d;color:#fecaca;padding:10px 12px;border-radius:10px;margin:10px 0;display:none}
@@ -83,15 +110,17 @@
 
   <div id="err" class="error"></div>
 
-  <!-- Statusi + kontroles (horizontāli ritināmas mazā ekrānā) -->
-  <div class="bar" id="statusBar" aria-label="Datu filtri un kontrole">
-    <span class="pill ok"   id="stat-water">Ūdens: —</span>
-    <span class="pill warn" id="stat-alarm">Signalizācija: —</span>
-    <span class="pill ok"   id="stat-wifi">Wi-Fi: —</span>
-    <span class="pill warn" id="stat-clean">Tīrīt pēc: —</span>
-    <span class="pill ok"   id="stat-feed">Barošana: —</span>
+  <!-- Rīkjosla bez horizontālās ritināšanas -->
+  <section class="toolbar" aria-label="Statuss un vadība">
+    <div class="pills">
+      <span class="pill ok"   id="stat-water">Ūdens: —</span>
+      <span class="pill warn" id="stat-alarm">Signalizācija: —</span>
+      <span class="pill ok"   id="stat-wifi">Wi-Fi: —</span>
+      <span class="pill warn" id="stat-clean">Tīrīt pēc: —</span>
+      <span class="pill ok"   id="stat-feed">Barošana: —</span>
+    </div>
 
-    <div class="ctrls">
+    <div class="controls">
       <label for="range">Laika periods:</label>
       <select id="range" aria-label="Laika periods">
         <option value="24h">Pēdējās 24 h</option>
@@ -101,12 +130,12 @@
       </select>
       <button id="refresh" type="button">Atjaunot</button>
       <label class="mono" for="autoMins">Auto (min):</label>
-      <input id="autoMins" type="number" min="0" step="1" value="0" style="width:84px" />
+      <input id="autoMins" type="number" min="0" step="1" value="0" inputmode="numeric" />
       <button id="applyAuto" type="button">Iestatīt</button>
     </div>
-  </div>
+  </section>
 
-  <!-- Grafiki blakus (auto-fit) -->
+  <!-- Grafiki -->
   <div class="grid">
     <div class="card">
       <div class="head">Temperatūra (°C)</div>
@@ -118,7 +147,7 @@
     </div>
   </div>
 
-  <!-- Notikumi kā dropdown -->
+  <!-- Notikumi -->
   <details class="dropdown" id="eventsDrop">
     <summary>Notikumu žurnāls</summary>
     <div class="drop-body">
@@ -139,7 +168,7 @@
 <script>
 /*** DATU AVOTS ***/
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQZnVtmAM6S2H1BTJhqKqIPFPh5aU9AWYJclFDU2f4J-k3ouRNMFyjYEZo8xIfxwHT-SjMBAUWOl1PX/pub?gid=0&single=true&output=csv';
-const CORS_PROXY = ''; // ja kādreiz vajag: 'https://cors.isomorphic-git.org/'
+const CORS_PROXY = ''; // vajadzības gadījumā: 'https://cors.isomorphic-git.org/'
 
 /*** Kolonnu aliasi ***/
 const KEY = {
@@ -232,7 +261,7 @@ function render(objs){
   }
   if(!T.length) throw new Error('Nav derīgu rindu.');
 
-  // statusa tabletes
+  // statusi
   const wifi = lastNonEmpty(objs, KEY.wifi);
   const wlvl = lastNonEmpty(objs, KEY.water);
   const alarm= lastNonEmpty(objs, KEY.alarm);
@@ -243,7 +272,7 @@ function render(objs){
   setPill('stat-clean', 'Tīrīt pēc: '+(cleanSVal>0 ? fmtSec(cleanSVal) : (cleanSVal===0?'jātīra':'—')), (cleanSVal>0)?'warn':'err');
   setPill('stat-feed',  'Barošana: '+(lastNonEmpty(objs, KEY.feed)||'—'), 'ok');
 
-  // notikumi (dropdown tabulā)
+  // notikumi
   tbody.innerHTML='';
   const ev=[];
   for(let i=0;i<objs.length;i++){
@@ -270,7 +299,7 @@ function render(objs){
     const tr=document.createElement('tr'); tr.innerHTML=`<td class="mono">${t}</td><td>${what}</td><td>${det}</td>`; tbody.appendChild(tr);
   });
 
-  // Temperatūras robežas: neliels “pad”, lai skala nemaldina
+  // Temperatūras robežas
   const tMin=Math.min(...TEMP), tMax=Math.max(...TEMP);
   const pad=.4, yMin=Math.floor((tMin-pad)*10)/10, yMax=Math.ceil((tMax+pad)*10)/10;
 
