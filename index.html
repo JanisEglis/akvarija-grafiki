@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="lv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Akvārija panelis</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<style>
+  :root{ --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --ok:#10b981; --warn:#f59e0b; --err:#ef4444; }
+  html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,Segoe UI,Roboto,Arial;}
+  .wrap{max-width:1100px;margin:24px auto;padding:0 16px;}
+  h1{font-size:20px;margin:0 0 14px}
+  .row{display:grid;gap:16px}
+  @media(min-width:900px){ .row{grid-template-columns:1fr 1fr} }
+  .card{background:var(--card);border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+  .card>.head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #1f2937}
+  .head h2{font-size:16px;margin:0}
+  .pad{padding:12px 14px}
+  .ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  select,button,input[type="number"]{background:#1f2937;border:1px solid #303646;color:var(--text);border-radius:8px;padding:8px 10px;cursor:pointer}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px 10px;border-bottom:1px solid #1f2937;font-size:13px}
+  th{color:var(--muted);font-weight:600;text-align:left}
+  .pill{display:inline-block;padding:.2em .55em;border-radius:999px;font-size:12px}
+  .ok{background:#064e3b;color:#a7f3d0}
+  .warn{background:#7c2d12;color:#fed7aa}
+  .err{background:#7f1d1d;color:#fecaca}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+  .footer{opacity:.6;margin:16px 0 32px}
+  #temp,#lf{height:360px}
+  .error{background:#7f1d1d;color:#fecaca;padding:10px 12px;border-radius:10px;margin:10px 0;display:none}
+  .events-wrap{ max-height: 280px; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🐟 Akvārija panelis</h1>
+
+  <div id="err" class="error"></div>
+
+  <div class="card">
+    <div class="head">
+      <h2>Datu filtrs</h2>
+      <div class="ctrls">
+        <label for="range">Laika periods:</label>
+        <select id="range">
+          <option value="24h">Pēdējās 24 h</option>
+          <option value="7d">Pēdējās 7 dienas</option>
+          <option value="30d">Pēdējās 30 dienas</option>
+          <option value="all">Viss periods</option>
+        </select>
+        <button id="refresh">Atjaunot</button>
+        <label class="mono" style="margin-left:8px">Auto-refresh (min):</label>
+        <input id="autoMins" type="number" min="0" step="1" value="0" style="width:80px" />
+        <button id="applyAuto">Iestatīt</button>
+      </div>
+    </div>
+    <div class="pad" style="display:flex;gap:16px;flex-wrap:wrap">
+      <div><span class="pill ok" id="stat-water">Ūdens: —</span></div>
+      <div><span class="pill" id="stat-alarm">Signalizācija: —</span></div>
+      <div><span class="pill" id="stat-wifi">Wi-Fi: —</span></div>
+      <div><span class="pill" id="stat-clean">Tīrīt pēc: —</span></div>
+      <div><span class="pill" id="stat-feed">Barošana: —</span></div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:16px">
+    <div class="card">
+      <div class="head"><h2>Temperatūra (°C)</h2></div>
+      <div id="temp"></div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>LED, Dzesēšana, Ūdens</h2></div>
+      <div id="lf"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="head"><h2>Notikumu žurnāls</h2></div>
+    <div class="pad">
+      <div class="events-wrap">
+        <table id="events">
+          <thead><tr><th>Laiks</th><th>Notikums</th><th>Detalizācija</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer mono">Dati no Google Sheets (CSV) · atjaunojas ielādējot, spiežot “Atjaunot” vai pēc auto-refresh iestatījuma.</div>
+</div>
+
+<!-- Bibliotēkas -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<script>
+/*** KONFIGS ***/
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQZnVtmAM6S2H1BTJhqKqIPFPh5aU9AWYJclFDU2f4J-k3ouRNMFyjYEZo8xIfxwHT-SjMBAUWOl1PX/pub?gid=0&single=true&output=csv';
+const CORS_PROXY = ''; // ja lokāli vajag: 'https://cors.isomorphic-git.org/'
+
+/*** Kolonnu aliasi ***/
+const KEY = {
+  time:  ['Laiks'],
+  temp:  ['Temp'],
+  led:   ['LED'],
+  fan:   ['Dzesēšana','Dzesesana'],
+  alarm: ['Signalizācija','Signalizacija'],
+  water: ['Ūdens līmenis','Ūdens limenis','Udens līmenis','Udens limenis'],
+  clean: ['Tīrīt pēc (s)','Tīrīt pēc','Tirit pec (s)','Tirit pec'],
+  feed:  ['Barošana','Barosana'],
+  wifi:  ['WiFi OK','Wi-Fi OK','Wifi OK','WiFi','WIFI OK'],
+  fanMode:['Fan rež.','Fan rež','Fan rez.','Fan rez','Fan režīms','Fan režims','Fan rezims']
+};
+
+/*** UI elementi ***/
+const elErr = document.getElementById('err');
+const selRange = document.getElementById('range');
+const btnRefresh = document.getElementById('refresh');
+const inputAuto = document.getElementById('autoMins');
+const btnApplyAuto = document.getElementById('applyAuto');
+
+let chTemp = echarts.init(document.getElementById('temp'), null, {renderer:'canvas'});
+let chLF   = echarts.init(document.getElementById('lf'),   null, {renderer:'canvas'});
+window.addEventListener('resize', ()=>{ chTemp.resize(); chLF.resize(); });
+
+let autoTimer = null;
+
+/*** Palīgfunkcijas ***/
+function showError(msg){ elErr.style.display='block'; elErr.textContent=msg; console.error(msg); }
+function hideError(){ elErr.style.display='none'; }
+
+const parseLVDate = s => {
+  if (!s) return NaN;
+  const [date, time='00:00:00'] = String(s).trim().split(' ');
+  const [Y,M,D] = date.split('.').map(n=>parseInt(n,10));
+  const [h,m,ss] = time.split(':').map(n=>parseInt(n,10));
+  return new Date(Y, (M||1)-1, D||1, h||0, m||0, ss||0).getTime();
+};
+const toNum = x => {
+  if (x === null || x === undefined) return 0;
+  return Number(String(x).replace(/[ \u00A0]/g,'').replace(',', '.')) || 0;
+};
+const fmtSec = s => { s=Number(s)||0; const d=Math.floor(s/86400); s%=86400; const h=Math.floor(s/3600); s%=3600; const m=Math.floor(s/60);
+  return (d?d+'d ':'')+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+};
+const norm = s => String(s||'').trim().toUpperCase();
+
+/* -------- Normalizatori virsrakstiem -------- */
+const canon = s =>
+  String(s || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.\u00A0]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+/* katrai rindai ātra karte: normalizēts virsraksts -> vērtība */
+const rowKeyCache = new WeakMap();
+function rowMap(row){
+  let m = rowKeyCache.get(row);
+  if (m) return m;
+  m = {};
+  for (const k of Object.keys(row)) m[canon(k)] = row[k];
+  rowKeyCache.set(row, m);
+  return m;
+}
+
+/* paņem vērtību pēc jebkura aliasa */
+function pick(row, aliases){
+  const m = rowMap(row);
+  for (const a of aliases){
+    const v = m[canon(a)];
+    if (v !== undefined && String(v).trim() !== '') return v;
+  }
+  return '';
+}
+
+/* pēdējā ne-tukšā vērtība */
+function lastNonEmpty(rows, aliases){
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const v = pick(rows[i], aliases);
+    if (String(v).trim() !== '') return v;
+  }
+  return '';
+}
+
+async function loadCSVObjects(){
+  const url = (CORS_PROXY ? CORS_PROXY + CSV_URL : CSV_URL);
+  const res = await fetch(url, {cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP '+res.status+' – nevar ielādēt CSV');
+  const txt = await res.text();
+  const parsed = Papa.parse(txt, { header: true, skipEmptyLines: true });
+  if (parsed.errors && parsed.errors.length) console.warn(parsed.errors);
+  return parsed.data;
+}
+
+function filterByRange(objs, range){
+  if (range==='all') return objs;
+  const now = Date.now();
+  const span = range==='24h' ? 864e5 : range==='7d' ? 7*864e5 : 30*864e5;
+  return objs.filter(o => {
+    const t = parseLVDate(pick(o, KEY.time));
+    return isFinite(t) && (now - t) <= span;
+  });
+}
+
+/* Palīgi notikumiem */
+function feedNums(s){
+  // "3/16" -> {n:3,total:16}
+  const m = String(s||'').match(/(\d+)\s*\/\s*(\d+)/);
+  return m ? {n:parseInt(m[1],10), total:parseInt(m[2],10)} : {n:null,total:null};
+}
+
+function render(objs){
+  if (!objs.length) throw new Error('Nav datu izvēlētajam periodam.');
+
+  // Sērijas
+  const T=[], TEMP=[], LED=[], FAN=[], WATERP=[];
+  const ALARM=[], WATER=[], CLEAN=[], FEED=[], WOK=[], FMODE=[];
+  for (const o of objs){
+    const ts = parseLVDate(pick(o, KEY.time)); if (!isFinite(ts)) continue;
+    T.push(ts);
+    TEMP.push(toNum(pick(o, KEY.temp)));
+    LED.push(toNum(pick(o, KEY.led)));
+    const fanPct = toNum(pick(o, KEY.fan)); FAN.push(fanPct);
+    ALARM.push(pick(o, KEY.alarm));
+    const wl = pick(o, KEY.water); WATER.push(wl); WATERP.push(norm(wl)==='OK' ? 100 : 0);
+    CLEAN.push(toNum(pick(o, KEY.clean)));
+    FEED.push(pick(o, KEY.feed));
+    WOK.push(pick(o, KEY.wifi));
+    FMODE.push(norm(pick(o, KEY.fanMode))); // AUTO / MANUAL
+  }
+  if (!T.length) throw new Error('Nav derīgu rindu.');
+
+  // Temperatūras ass (dinamiska)
+  const tMin = Math.min(...TEMP), tMax = Math.max(...TEMP);
+  const pad  = 0.4, yMin = Math.floor((tMin - pad)*10)/10, yMax = Math.ceil((tMax + pad)*10)/10;
+
+  // Statusa “tabletes” (pēdējās ne-tukšās)
+  const wifi = lastNonEmpty(objs, KEY.wifi);
+  const wlvl = lastNonEmpty(objs, KEY.water);
+  const alarm= lastNonEmpty(objs, KEY.alarm);
+  const cleanSVal = toNum(lastNonEmpty(objs, KEY.clean));
+  const setPill = (id, text, cls) => { const el=document.getElementById(id); el.textContent=text; el.className='pill '+cls; };
+
+  setPill('stat-water', 'Ūdens: '+(wlvl||'—'), (norm(wlvl)==='OK')?'ok':'err');
+  setPill('stat-alarm', 'Signalizācija: '+(alarm||'—'), (norm(alarm)==='IESLĒGTA')?'warn':'ok');
+  setPill('stat-wifi',  'Wi-Fi: '+(wifi||'—'), (norm(wifi)==='OK')?'ok':'err');
+  setPill('stat-clean', 'Tīrīt pēc: '+(cleanSVal>0 ? fmtSec(cleanSVal) : (cleanSVal===0?'jātīra':'—')), (cleanSVal>0)?'warn':'err');
+  setPill('stat-feed',  'Barošana: '+(lastNonEmpty(objs, KEY.feed)||'—'), 'ok');
+
+  // Notikumi (stāvokļu maiņas)
+  const tbody = document.querySelector('#events tbody'); tbody.innerHTML = '';
+  const ev=[];
+  for(let i=0;i<objs.length;i++){
+    const o=objs[i], p=objs[i-1]; const t = new Date(parseLVDate(pick(o, KEY.time))).toLocaleString('lv-LV');
+
+    // Signalizācija
+    const a = norm(pick(o, KEY.alarm)), ap= p ? norm(pick(p, KEY.alarm)) : '';
+    if (!p || a!==ap){ if (a==='IESLĒGTA') ev.push([t,'Signalizācija','IESLĒGTA']); if (p && ap==='IESLĒGTA' && a!=='IESLĒGTA') ev.push([t,'Signalizācija','Izslēgta']); }
+
+    // Ūdens līmenis
+    const w = norm(pick(o, KEY.water)), wp= p ? norm(pick(p, KEY.water)) : '';
+    if (!p || w!==wp){ if (w==='ZEMS') ev.push([t,'Ūdens līmenis','Zems']); if (p && wp==='ZEMS' && w==='OK') ev.push([t,'Ūdens līmenis','Atjaunojies OK']); }
+
+    // Wi-Fi
+    const wi = norm(pick(o, KEY.wifi)), wip= p ? norm(pick(p, KEY.wifi)) : '';
+    if (!p || wi!==wip){ if (wi==='OK') ev.push([t,'Wi-Fi','Savienots']); if (wi==='ERR' || wi==='NO') ev.push([t,'Wi-Fi','Zudis savienojums']); }
+
+    // Tīrīšana: termiņš beidzies
+    const sNow = toNum(pick(o, KEY.clean)), sPrev= p ? toNum(pick(p, KEY.clean)) : null;
+    if (sPrev!==null && sPrev>0 && sNow<=0) ev.push([t,'Tīrīšana','Termiņš beidzies (jātīra)']);
+    // Tīrīšana: atiestatīts (palielinājums > 1 diena)
+    if (sPrev!==null && sNow - sPrev > 86400) ev.push([t,'Tīrīšana','Taimeris atiestatīts']);
+
+    // Barošana (x/y maiņa)
+    const f  = pick(o, KEY.feed), fp = p ? pick(p, KEY.feed) : '';
+    const fn = feedNums(f), fpn=feedNums(fp);
+    if (p && fn.n!==null && (fn.n!==fpn.n || fn.total!==fpn.total)) {
+      ev.push([t,'Barošana', `${fn.n}/${fn.total}`]);
+    }
+
+    // Dzesēšana: starts/stop (0 ⇄ >0)
+    const fanNow = toNum(pick(o, KEY.fan));
+    const fanPrev= p ? toNum(pick(p, KEY.fan)) : null;
+    const modeNow = norm(pick(o, KEY.fanMode));
+    const modePrev= p ? norm(pick(p, KEY.fanMode)) : '';
+    if (fanPrev!==null) {
+      if (fanPrev===0 && fanNow>0) ev.push([t,'Dzesēšana','Sākta ('+(modeNow||'AUTO/MANUAL?')+'), '+fanNow+'%']);
+      if (fanPrev>0 && fanNow===0) ev.push([t,'Dzesēšana','Apturēta']);
+    }
+    // Dzesēšanas režīms
+    if (p && modeNow && modeNow!==modePrev) ev.push([t,'Dzesēšanas režīms', modeNow]);
+
+    // LED būtiska maiņa (≥ 10 pp)
+    const ledNow = toNum(pick(o, KEY.led));
+    const ledPrev= p ? toNum(pick(p, KEY.led)) : null;
+    if (ledPrev!==null && Math.abs(ledNow-ledPrev) >= 10) {
+      ev.push([t,'LED', ledNow+'%']);
+    }
+
+    // Sensors OK
+    const sens = canon('Sensor OK'); const m=rowMap(o), mp=p?rowMap(p):null;
+    if (m[sens]!==undefined) {
+      const sNowTxt = norm(m[sens]); const sPrevTxt = mp ? norm(mp[sens]) : '';
+      if (!p || sNowTxt!==sPrevTxt) {
+        ev.push([t,'Sensors', (sNowTxt==='OK'?'OK':'Kļūda')]);
+      }
+    }
+  }
+  ev.reverse().slice(0,300).forEach(([t,what,det])=>{
+    const tr=document.createElement('tr'); tr.innerHTML=`<td class="mono">${t}</td><td>${what}</td><td>${det}</td>`; tbody.appendChild(tr);
+  });
+
+  // Temperatūra
+  chTemp.setOption({
+    tooltip:{trigger:'axis'},
+    grid:{left:50,right:20,top:20,bottom:40},
+    xAxis:{type:'time'},
+    yAxis:{type:'value',name:'°C',min:yMin,max:yMax},
+    series:[{ type:'line', name:'Temperatūra',
+      data:T.map((t,i)=>[t,TEMP[i]]), smooth:true, showSymbol:false, symbol:'none', emphasis:{disabled:true}, lineStyle:{width:2}
+    }]
+  });
+
+  // LED, Dzesēšana, Ūdens
+  chLF.setOption({
+    tooltip:{ trigger:'axis' },
+    grid:{ left:50, right:20, top:26, bottom:40 },
+    legend:{
+      top: 0, icon:'rect', itemWidth:14, itemHeight:6,
+      textStyle:{ color:'#e5e7eb' }, inactiveColor:'#6b7280',
+      data:[ {name:'LED %',icon:'rect'}, {name:'Dzesēšana %',icon:'rect'}, {name:'Ūdens (0/100)',icon:'rect'} ]
+    },
+    xAxis:{ type:'time' },
+    yAxis:{ type:'value', name:'%', min:0, max:100 },
+    series:[
+      { type:'line', name:'LED %', data:T.map((t,i)=>[t,LED[i]]), smooth:true, showSymbol:false, symbol:'none', emphasis:{disabled:true}, lineStyle:{width:2} },
+      { type:'line', name:'Dzesēšana %', data:T.map((t,i)=>[t,FAN[i]]), smooth:true, showSymbol:false, symbol:'none', emphasis:{disabled:true}, lineStyle:{width:2} },
+      { type:'line', name:'Ūdens (0/100)', data:T.map((t,i)=>[t,WATERP[i]]), step:true, showSymbol:false, symbol:'none', emphasis:{disabled:true}, lineStyle:{width:2} }
+    ]
+  });
+}
+
+async function loadAndRender(){
+  try{
+    hideError();
+    const all = await loadCSVObjects();
+    const filtered = filterByRange(all, selRange.value);
+    render(filtered);
+  }catch(e){
+    showError('Datu ielādes/parsēšanas kļūda: ' + e.message);
+  }
+}
+
+/*** Notikumi ***/
+btnRefresh.addEventListener('click', loadAndRender);
+btnApplyAuto.addEventListener('click', ()=>{
+  const mins = Math.max(0, parseInt(inputAuto.value||'0',10));
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  if (mins>0){ autoTimer = setInterval(loadAndRender, mins*60*1000); }
+  loadAndRender();
+});
+
+/*** Start ***/
+document.addEventListener('DOMContentLoaded', loadAndRender);
+</script>
+</body>
+</html>
